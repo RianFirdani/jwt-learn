@@ -12,7 +12,23 @@ app.use(express.json())
 app.use(cors())
 dotenv.config()
 
-app.get('/',async(req,res)=>{
+const checkAuth = (req,res,next)=>{
+    const {authorization} = req.headers
+
+    if(!authorization) res.status(401).json({message : "Token diperlukan"})
+    
+    const token = authorization.split(' ')[1]
+    const secret = process.env.TOKEN_SECRET
+
+    try{
+        const jwtDecode = jwt.verify(token,secret)
+        req.userData = jwtDecode
+    }catch(e){
+        return res.status(401).json({message : "Unauthorize"})
+    }
+}
+
+app.get('/',checkAuth,async(req,res)=>{
     const data = await prisma.user.findMany()
     res.send(data)
 })
@@ -41,6 +57,7 @@ app.post('/register',async (req,res)=>{
 
 app.post('/login',async (req,res)=>{
     const {username,password} = req.body
+    const secret = process.env.TOKEN_SECRET
     const user = await prisma.user.findFirst({
         where : {
             username,
@@ -53,7 +70,13 @@ app.post('/login',async (req,res)=>{
 
     if(!isSame) res.status(404).json({message : "Password is Wrong"})
 
-    if(user && isSame) res.status(200).json({message : "Login Successfull"})
+    if(user && isSame) {
+        const token = jwt.sign(user,secret)
+        return res.status(200).json({
+            message : "Login Successfull",
+            token
+        })
+    }
 })
 app.listen(process.env.PORT,()=>{
     console.log('Server is running on Port : 5000')
